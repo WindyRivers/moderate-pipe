@@ -14,8 +14,6 @@ Xiaohongshu's content-safety platform) are actually built on: message queues,
 consumer groups, delivery semantics, idempotency, retries, dead-letter queues,
 circuit breaking, graceful degradation, rate limiting, and chaos testing.
 
-> Author: **Zhao Songyan (WindyRivers)** · sole author of all four projects.
-
 ---
 
 ## Backend portfolio — how the four projects relate
