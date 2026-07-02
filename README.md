@@ -14,7 +14,35 @@ Xiaohongshu's content-safety platform) are actually built on: message queues,
 consumer groups, delivery semantics, idempotency, retries, dead-letter queues,
 circuit breaking, graceful degradation, rate limiting, and chaos testing.
 
-> Author: **Zhao Songyan (WindyRivers)** · sole author.
+> Author: **Zhao Songyan (WindyRivers)** · sole author of all four projects.
+
+---
+
+## Backend portfolio — how the four projects relate
+
+This repo is **Project 2** — the hub — of a four-project backend suite built around one connected business line: a content platform plus the moderation system that governs it. Each project is its own repository and runs independently; together they tell a single, product-minded story.
+
+| # | Project | Stack | Repo |
+|---|---------|-------|------|
+| 1 | ContentHub — content platform (publish / feed / social) | Go, Gin, GORM, MySQL, Redis, JWT | [content-hub-go](https://github.com/WindyRivers/content-hub-go) |
+| **2** | **ModeratePipe — distributed moderation pipeline** | Go, gRPC, Kafka, Redis, MySQL | **← this repo** |
+| 3 | ObserveStack — observability & reliability | Prometheus, Grafana, pprof, k6 | [observe-stack](https://github.com/WindyRivers/observe-stack) |
+| 4 | GuardGate — Java risk service + API gateway | Java 17, Spring Boot 3, Spring Cloud Alibaba, gRPC | [guard-gate](https://github.com/WindyRivers/guard-gate) |
+
+```mermaid
+flowchart LR
+    P1["1 · ContentHub<br/>content platform"] -->|publish flow evolves into| P2["2 · ModeratePipe<br/>async moderation"]
+    P2 -->|instrumented & monitored by| P3["3 · ObserveStack<br/>metrics · dashboards · load tests"]
+    P2 -->|risk gRPC + Kafka, fronted by| P4["4 · GuardGate<br/>Java risk service + gateway"]
+```
+
+This project is the **center of gravity**: Project 1 feeds into it, and Projects 3 and 4 both build on it.
+
+- **ContentHub → ModeratePipe:** *this* project takes Project 1's synchronous "publish a post" flow and turns it into an asynchronous, independently-scaled moderation pipeline (Kafka + gRPC).
+- **ModeratePipe → ObserveStack:** Project 3 is the observability layer over *this* project's services (Prometheus / Grafana / k6 / pprof).
+- **ModeratePipe → GuardGate:** Project 4 adds a **Java** risk-control service (it consumes *this* project's Kafka topics — a `rejected` result on `review-result-topic` becomes a risk signal — and answers the Review Service over gRPC) plus a unified API gateway in front of the system, making it polyglot (Go + Java).
+
+Each project is independently deployable by design; the most integrated runnable demo is Project 2 + Project 4 together (GuardGate's `--profile full`).
 
 ---
 
