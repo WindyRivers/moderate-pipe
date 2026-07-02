@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package user.v1;
+
+// The generated Go package. It lands in proto/gen so every service can import
+// the same client/server stubs from a single module path.
+option go_package = "github.com/WindyRivers/moderate-pipe/proto/gen;userpb";
+
+// UserService is the synchronous, strongly-typed contract the Review Service
+// calls into while moderating a post. gRPC (HTTP/2 + protobuf) is used here
+// rather than JSON/REST because these are internal, high-frequency,
+// low-latency service-to-service calls where a schema-checked binary protocol
+// and generated stubs pay off.
+service UserService {
+  // GetUserReputation returns the poster's reputation score so the rule engine
+  // can route low-reputation users to manual review.
+  rpc GetUserReputation(GetUserReputationRequest) returns (GetUserReputationResponse);
+
+  // GetUserProfile returns basic profile fields (used for enrichment/logging).
+  rpc GetUserProfile(GetUserProfileRequest) returns (GetUserProfileResponse);
+}
+
+message GetUserReputationRequest {
+  uint64 user_id = 1;
+}
+
+message GetUserReputationResponse {
+  uint64 user_id = 1;
+  // reputation is a 0-100 score. Higher is more trustworthy.
+  int32 reputation = 2;
+  // violation_count is the number of past moderation rejections; it feeds the
+  // score and is surfaced for observability.
+  int32 violation_count = 3;
+}
+
+message GetUserProfileRequest {
+  uint64 user_id = 1;
+}
+
+message GetUserProfileResponse {
+  uint64 user_id = 1;
+  string username = 2;
+  string email = 3;
+  int32 reputation = 4;
+}

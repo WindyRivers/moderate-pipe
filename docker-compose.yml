@@ -1,0 +1,137 @@
+# One-command stack for the distributed moderation pipeline:
+#   docker compose up --build
+# Brings up Kafka (single-node KRaft, no Zookeeper), MySQL, Redis, and the three
+# microservices. review-service runs 2 replicas by default to demonstrate a
+# Kafka consumer group; scale it live with:
+#   docker compose up --build --scale review-service=3
+
+services:
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: moderate-kafka
+    ports:
+      - "29092:29092" # host-facing listener for debugging tools
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 15
+
+  mysql:
+    image: mysql:8.0
+    container_name: moderate-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: moderate
+      MYSQL_USER: moderate
+      MYSQL_PASSWORD: moderate
+    ports:
+      - "3307:3306" # 3307 on host to avoid clashing with a native MySQL / Project 1
+    volumes:
+      - mysql_data:/var/lib/mysql
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: moderate-redis
+    ports:
+      - "6380:6379" # 6380 on host to avoid clashing with a native Redis / Project 1
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  user-service:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    container_name: moderate-user
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_LOG_LEVEL: info
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      GRPC_USER_LISTEN: ":9090"
+    # gRPC-only service; no host port needed (Review Service reaches it in-network).
+
+  content-service:
+    build:
+      context: .
+      args:
+        SERVICE: content-service
+    container_name: moderate-content
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      APP_ENV: development
+      APP_LOG_LEVEL: info
+      APP_HTTP_PORT: 8080
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_PARTITIONS: 3
+    ports:
+      - "8080:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  review-service:
+    build:
+      context: .
+      args:
+        SERVICE: review-service
+    # No container_name / published ports so it can scale to multiple replicas.
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    environment:
+      APP_ENV: development
+      APP_LOG_LEVEL: info
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      REDIS_ADDR: redis:6379
+      KAFKA_BROKERS: kafka:9092
+      KAFKA_CONSUMER_GROUP: review-service
+      GRPC_USER_ADDR: user-service:9090
+    deploy:
+      replicas: 2
+
+volumes:
+  mysql_data:

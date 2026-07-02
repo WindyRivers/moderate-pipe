@@ -1,0 +1,19 @@
+# Binaries
+/bin/
+*.exe
+app
+
+# Local env
+.env
+
+# Go
+vendor/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+
+# Load-test output
+scripts/*.out
