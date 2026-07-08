@@ -9,8 +9,7 @@ it is written `pending`, enqueued, run through a rule engine by an independently
 scaled Review Service, and only becomes visible once it passes.
 
 This is Project 2 of a connected backend portfolio. It exists to demonstrate the
-distributed-systems concepts that content platforms (Zhihu's content governance,
-Xiaohongshu's content-safety platform) are actually built on: message queues,
+distributed-systems concepts that content platforms are actually built on: message queues,
 consumer groups, delivery semantics, idempotency, retries, dead-letter queues,
 circuit breaking, graceful degradation, rate limiting, and chaos testing.
 
